@@ -1,0 +1,450 @@
+---
+title: "CS 422 Section 01"
+output: html_notebook
+author: "Avinash Vellineni"
+---
+ 
+## Homework 2
+
+## Problem 2
+
+### Question 2.1 - A
+
+```{r}
+rm(list = ls())
+setwd("E:/IIT CHICAGO STUDIES/IIT Chicago semester 2/Data Mining/Assignments/Assignment2")
+set.seed(1122)
+```
+
+Data Cleaning
+
+```{r}
+train <- read.csv("adult-train.csv", header=T, sep=",")
+head(train)
+test <-  read.csv("adult-test.csv", header = T, sep=",")
+head(test)
+```
+
+removing ? in the training dataset
+```{r}
+sum(train$workclass == "?")
+list1 <- which(train$workclass == "?")
+sum(train$occupation == "?")
+list2 <- which(train$occupation == "?")
+sum(train$native_country == "?")
+list3 <- which(train$native_country == "?")
+train_index <- c(list1,list2,list3)
+train <- train[-train_index,]
+train
+```
+
+removing ? in the test dataset
+
+```{r}
+sum(test$workclass == "?")
+list4 <- which(test$workclass == "?")
+sum(test$occupation == "?")
+list5 <- which(test$occupation == "?")
+sum(test$native_country == "?")
+list6 <- which(test$native_country == "?")
+test_index <- c(list4,list5,list6)
+test <- test[-test_index,]
+test
+```
+
+End of data cleaning
+
+### Question 2.1 - B - (i)
+
+```{r}
+library(rpart)
+library(caret)
+library(rpart.plot)
+library(ROCR)
+```
+
+Building model using the training dataset
+
+```{r}
+model_train <- rpart(income ~ ., method="class", data=train)
+rpart.plot(model_train, extra=104, fallen.leaves = T, type=4, main="Rpart on Adult Data set")
+summary(model_train)
+```
+
+The top three important predictors in the model are relationship,marital_status,capital_gain
+
+### Question 2.1-B-(ii)
+
+The first split is done on the predictor "Relationship". The class label is <=50K.
+
+In the first node 100% of the data is considered, the predicted class is relationship = Not_in_Family,Other_relative,own_child,Unmarried.Observation distribution for class relationship = Not_in_Family,Other_relative,own_child,Unmarried is 75%.observation distribution for class relationship = Husband,Wife is 25%.So the distribution of observations between the <=50K and >50K classes at this node is 75% and 25% respectively.
+
+### Question 2.1-C-(i)
+
+Prediction using the test dataset
+
+```{r}
+predict_test <- predict(model_train, test, type="class")
+head(predict_test)
+head(test$income)
+```
+
+
+```{r}
+cm <- confusionMatrix(predict_test, test[, 15])
+cm
+```
+
+```{r}
+sensitivity_test <- as.numeric(formatC(cm$byClass[1], digits = 3, format = "f"))
+specificity_test <- as.numeric(formatC(cm$byClass[2], digits = 3, format = "f"))
+balanced_accuracy <-(sensitivity_test+specificity_test)/2
+balanced_accuracy <- round(balanced_accuracy,digits = 3)
+cat(paste("The Balance Accuracy of the model is ",balanced_accuracy,"\n"))
+```
+### Question 2.1-C-(ii)
+
+```{r}
+balance_error_rate <- 1.0 - balanced_accuracy
+cat(paste("The Balance error rate of the model is ",balance_error_rate,"\n"))
+```
+
+
+### Question 2.1-C-(iii)
+
+```{r}
+cat(paste("The Sensitivity of the model is ",sensitivity_test,"\n"))
+cat(paste("The Specificity of the model is ",specificity_test,"\n"))
+```
+
+### Question 2.1-C-(iV)
+
+Roc Curve
+
+```{r}
+pred.rocr <- predict(model_train, newdata=test, type="prob")[,2]
+f.pred <- prediction(pred.rocr, test$income)
+f.perf <- performance(f.pred, "tpr", "fpr")
+plot(f.perf, colorize=T, lwd=3)
+abline(0,1)
+auc <- performance(f.pred, measure = "auc")
+cat(paste("The area under curve (AUC) for this model is ", round(auc@y.values[[1]], 3)))
+
+```
+
+### Question 2.1-D
+
+```{r}
+options("digits"=5)
+printcp(model_train)
+options("digits"=3)
+```
+The tree would't benefit from pruning.
+
+Inference from the tree -- Variables used in the tree construction are capital_gain,education,relationship.
+
+Error at the root node is 0.249. About 24.9% of the error occured at the root node.
+
+From the summary of the complexity table we can infer that n=30161, the column xerror(cross Validation error) has the  lowest value at the 4th split with a complexity of 0.01.
+
+Hence on pruning the tree we will increase the cross validation error.So we dont want to prune the tree since the error is the lowest at the 4th split.
+
+
+Extracting the Cp value corresponding to the lowest xerror.
+
+```{r}
+cpx=model_train$cptable[which.min(model_train$cptable[,"xerror"]), "CP"]
+cpx
+```
+
+### Question 2.1-E-(i)
+
+Class imbalance problem 
+
+Number of observations in class <=50K and >50K
+
+```{r}
+sum(train$income == "<=50K")  
+sum(train$income == ">50K")
+```
+
+## Question 2.1-E-(ii)
+
+```{r}
+list7 <- sample(which(train$income == "<=50K") , size=sum(train$income == ">50K"))
+head(list7)
+list8 <- which(train$income == ">50K")
+head(list8)
+new_index <- c(list7,list8)
+```
+Training model updated with equal number of observations of the two classes.
+
+```{r}
+New_training_model <- train[new_index, ]
+sum(New_training_model$income == "<=50K")  
+sum(New_training_model$income == ">50K")
+```
+## Question 2.1-E-(iii)
+
+```{r}
+New_model <- rpart(income ~ ., method="class", data=New_training_model)
+rpart.plot(New_model, extra=104, fallen.leaves = T, type=4, main=" New Rpart on Adult Dataset with equal proportion of test values")
+summary(New_model)
+```
+
+
+```{r}
+predinct_New_model <- predict(New_model, test, type="class")
+head(predinct_New_model)
+head(test$income)
+```
+
+```{r}
+new_cm <- confusionMatrix(predinct_New_model, test[,15])
+new_cm$byClass
+New_Balance_Accuracy <- as.numeric(formatC(new_cm$byClass[11], digits = 3, format = "f"))
+cat(paste("The Balance Accuracy of the model is ",New_Balance_Accuracy,"\n"))
+New_balance_error_rate <- 1.0 - New_Balance_Accuracy
+cat(paste("The Balance error rate of the model is ",New_balance_error_rate,"\n"))
+New_sensitivity_test <- as.numeric(formatC(new_cm$byClass[1], digits = 3, format = "f"))
+New_specificity_test <- as.numeric(formatC(new_cm$byClass[2], digits = 3, format = "f"))
+cat(paste("The Sensitivity of the model is ",New_sensitivity_test,"\n"))
+cat(paste("The Specificity of the model is ",New_specificity_test,"\n"))
+```
+
+## Question 2.1-F
+
+Roc Curve
+
+```{r}
+pred.rocr.new <- predict(New_model, newdata=test, type="prob")[,2]
+f.pred.new <- prediction(pred.rocr.new, test$income)
+f.perf.new <- performance(f.pred.new, "tpr", "fpr")
+plot(f.perf.new, colorize=T, lwd=3)
+abline(0,1)
+auc <- performance(f.pred.new, measure = "auc")
+cat(paste("The area under curve (AUC) for this model is ", round(auc@y.values[[1]], 3)))
+```
+
+The Balance accuracy when there was a class imbalance is 0.726 (i.e) the model can predict at 72.6% accuracy.
+
+The Balance accuracy with the new model(No class imbalance) is 0.809 (i.e) the model can predict at 80.9% accuracy.
+
+The Sensitivity and the specificity of the class imbalance model is 0.948,0.504.
+
+The Sensitivity and the specificity of the new model with no class imbalance is 0.782,0.835.
+
+We can infer that the new model has lower sensitivity and higher specificity than the class imbalance model.
+
+Balance accuracy for the class imbalance model is lower than the no class imbalance model.
+
+The Aoc of the new model is slightly higer than the Class imbalance model. The new model AOC is 0.846 and AOC of the class imbalance model is 0.843.
+
+
+### Question 2.2-A
+
+Random Forest
+
+
+```{r}
+library(randomForest)
+set.seed(1122)
+```
+
+
+```{r}
+str(train)
+table(train$income)
+table(test$income)
+random_model <- randomForest(income ~ ., data=train,importance=T)
+Predicted_Value_RF <- predict(random_model, test, type="class")
+RF_cm <- confusionMatrix(Predicted_Value_RF,test$income)
+
+```
+
+
+```{r}
+random_model
+```
+
+
+```{r}
+RF_cm
+```
+### Question 2.2-A-(i)-(ii)-(iii)
+
+```{r}
+RF_Balance_Acurracy <- as.numeric(formatC(RF_cm$byClass[11], digits = 3, format = "f"))
+RF_Acurracy <- as.numeric(formatC(RF_cm$overall[1], digits = 3, format = "f"))
+RF_Sensitivity <- as.numeric(formatC(RF_cm$byClass[1], digits = 3, format = "f"))
+RF_Specificity <- as.numeric(formatC(RF_cm$byClass[2], digits = 3, format = "f"))
+cat(paste("The Balance Accuracy of the model is ",RF_Balance_Acurracy,"\n"))
+cat(paste("The Accuracy of the model is ",RF_Acurracy,"\n"))
+cat(paste("The Sensitivity of the model is ",RF_Sensitivity,"\n"))
+cat(paste("The Specificity of the model is ",RF_Specificity,"\n"))
+```
+
+### Question 2.2-A-(iv)
+
+```{r}
+table(test$income)
+```
+In the test data set we have 11360 observations of class <=50K and 3700 observations of class >50K.
+
+sensitivity and the specificity makes sense because class <=50K has 11360 observations which is approximately 3 times the number of observations of the class >50K.
+
+So the Sensitivity is very high than specificity.Note Here the positive class is the majority class "<=50K".
+
+### Question 2.2-A-(v)
+
+since the number of observation of the class "<=50K" is 3 times higher than the observations of the class ">50K" and the positive class is "<=50K" so the sensitivity is high (Positive class) and specificity is low (negative class).
+
+### Question 2.2-A-(vi)
+
+```{r}
+varImpPlot(random_model)
+```
+
+For MeanDecreaseAccuracy -- The most important variable is capital_gain and the least important variable is native_country.
+For MeanDecreaseGini -- The most important variable is relationship and the least important variable is Race.
+
+
+### Question 2.2-A-(vii)
+
+```{r}
+print(random_model)
+```
+
+
+The number of variables tied at each split is 3.
+
+## Question 2.2-B-(i)
+
+```{r}
+str(train)
+mtry <- tuneRF(train[,-15], train[,15], ntreeTry=500,stepFactor=1.5,improve=0.01, trace=TRUE, plot=TRUE)
+print(mtry)
+```
+
+first the search begins with default value mtry=3 with 18.2% oob error and on searching towards the left with mtry=2 it finds oob error to be 17.8% and then towards the right with mtry=4 and oob error as 18.2%
+
+### Question 2.2-B-(ii)
+
+Mtry value selected is 2.
+
+### Question 2.2-B-(iii)
+
+```{r}
+random_model_update <- randomForest(income ~ ., data=train,importance=T,mtry=2)
+random_model_update
+```
+
+```{r}
+Predicted_Value_RF_new <- predict(random_model_update, test, type="class")
+head(Predicted_Value_RF_new)
+```
+
+```{r}
+RF_cm_new <- confusionMatrix(Predicted_Value_RF_new,test$income)
+RF_cm_new
+```
+
+```{r}
+RF_Balance_Acurracy_new <- as.numeric(formatC(RF_cm_new$byClass[11], digits = 3, format = "f"))
+RF_Acurracy_new <- as.numeric(formatC(RF_cm_new$overall[1], digits = 3, format = "f"))
+RF_Sensitivity_new <- as.numeric(formatC(RF_cm_new$byClass[1], digits = 3, format = "f"))
+RF_Specificity_new <- as.numeric(formatC(RF_cm_new$byClass[2], digits = 3, format = "f"))
+cat(paste("The Balance Accuracy of the model is ",RF_Balance_Acurracy_new,"\n"))
+cat(paste("The Accuracy of the model is ",RF_Acurracy_new,"\n"))
+cat(paste("The Sensitivity of the model is ",RF_Sensitivity_new,"\n"))
+cat(paste("The Specificity of the model is ",RF_Specificity_new,"\n"))
+
+```
+
+
+```{r}
+varImpPlot(random_model_update)
+```
+
+For meaDecreaseAccuracy the most important variable is Capital_gain and the least important variable is native_country.
+
+For meaDecreaseGini the most important variable is Capital_gain and the least important variable is Race.
+
+### Question 2.2-B-(iv)
+
+From the two models we can infer that the Accuracy,Balance_Accuracy and Specificity has higher values for the new model with mtry=2 compared to the old model with splits 3.
+
+For both the models Sensitivity remains the same.For both the models variable importance remains same but in old model for meandecreasedgini most important variable relationship and capital_gain has almost equal value.
+
+### Question 2.3
+
+Association Rules
+
+```{r}
+library(arules)
+```
+
+```{r}
+transaction_groceries <- read.transactions("groceries.csv", sep=",")
+transaction_groceries
+summary(transaction_groceries)
+```
+
+### Question 2.3-(i)
+
+```{r}
+rules_groceries <- apriori(transaction_groceries)
+summary(rules_groceries)
+```
+
+
+```{r}
+inspect(head(rules_groceries, by="confidence"))
+```
+
+No of rules at a support value of 0.1 is Zero
+
+### Question 2.3-(ii)
+
+```{r}
+rules_updated <- apriori(transaction_groceries, parameter=list(supp = 0.001))
+```
+
+At a support value of 0.001 we get >400 rules.
+
+```{r}
+inspect(sort(rules_updated,by = "support")[1:10])
+```
+
+
+```{r}
+itemFrequencyPlot(transaction_groceries,topN =15,col=rainbow(32),type="absolute")
+```
+
+
+## Question 2.3-(iii)
+
+Most frequently bought item is Whole Milk and its frequency is 2513.
+
+
+```{r}
+table(unlist(LIST(transaction_groceries)))
+barplot(sort(table(unlist(LIST(transaction_groceries))))[1:15],col=rainbow(32))
+```
+
+The least frequent item bought is baby food and  sound storage medium with frequency 1.
+
+```{r}
+inspect(sort(rules_updated,by = "support")[1:5])
+```
+
+```{r}
+inspect(sort(rules_updated,by = "confidence")[1:5])
+```
+```{r}
+inspect(sort(rules_updated,by = "support",decreasing = F)[1:5])
+```
+```{r}
+inspect(sort(rules_updated,by = "confidence",decreasing = F)[1:5])
+```
+
